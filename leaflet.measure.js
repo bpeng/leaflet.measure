@@ -18,12 +18,17 @@ L.Control.Measure = L.Control.extend({
     //  format distance method
     formatDistance: null,
     //  define text color
-    textColor: 'black'
+    textColor: 'black',
+    //  define z-index for measure layer
+    zIndex: 1000
   },
 
   initialize: function (options) {
     //  apply options to instance
-    L.Util.setOptions(this, options)
+    L.Util.setOptions(this, options);
+    //apply zIndex to tooltip box
+    $(".leaflet-measure-tooltip").css("z-index", this.options.zIndex);
+    $(".leaflet-measure-tooltip-total").css("z-index", this.options.zIndex);
   },
 
   onAdd: function (map) {
@@ -71,17 +76,27 @@ L.Control.Measure = L.Control.extend({
     }
   },
 
-  _startMeasuring: function () {
-    this._oldCursor = this._map._container.style.cursor
-    this._map._container.style.cursor = 'crosshair'
-    this._doubleClickZoom = this._map.doubleClickZoom.enabled()
-    this._map.doubleClickZoom.disable()
-    this._isRestarted = false
+ _startMeasuring: function () {
+    L.DomUtil.addClass(this._map._container, 'leaflet-crosshair');
+    this._doubleClickZoom = this._map.doubleClickZoom.enabled();
+    this._map.doubleClickZoom.disable();
+    this._isRestarted = false;
+    //change overlay z-index which contains the measure lines
+    if(this.options.zIndex) {
+        this.overlay_z = $(".leaflet-overlay-pane").css("z-index");
+        $(".leaflet-overlay-pane").css("z-index", this.options.zIndex);
+    }
 
     L.DomEvent
       .on(this._map, 'mousemove', this._mouseMove, this)
       .on(this._map, 'click', this._mouseClick, this)
       .on(this._map, 'dbclick', this._finishPath, this)
+      //disable click for overlays
+      this._map.eachLayer(function (layer) {
+           if (layer._popup) {
+              layer.off('click', layer._openPopup);
+          }
+      });
 
     if (!this._layerPaint) {
       this._layerPaint = L.layerGroup().addTo(this._map)
@@ -93,12 +108,20 @@ L.Control.Measure = L.Control.extend({
   },
 
   _stopMeasuring: function () {
-    this._map._container.style.cursor = this._oldCursor
-
+    L.DomUtil.removeClass(this._map._container, 'leaflet-crosshair');
+    if (this.overlay_z) {//change z-index of overlay-pane back
+        $(".leaflet-overlay-pane").css("z-index", this.overlay_z);
+    }
     L.DomEvent
       .off(this._map, 'mousemove', this._mouseMove, this)
       .off(this._map, 'click', this._mouseClick, this)
       .off(this._map, 'dbclick', this._finishPath, this)
+      //enable click for overlays
+      this._map.eachLayer(function (layer) {
+          if (layer._popup) {
+              layer.on('click', layer._openPopup);
+          }
+      });
 
     if (this._doubleClickZoom) {
       this._map.doubleClickZoom.enabled()
@@ -244,6 +267,7 @@ L.Control.Measure = L.Control.extend({
     })
     this._tooltip = L.marker(position, {
       icon: icon,
+      zIndexOffset: this.options.zIndex,
       clickable: false
     }).addTo(this._layerPaint)
   },
